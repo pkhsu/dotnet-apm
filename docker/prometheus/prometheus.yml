@@ -2,6 +2,14 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
+  # Scrape OpenTelemetry Collector metrics (collector's own metrics + forwarded app metrics)
   - job_name: 'otel-collector'
     static_configs:
-      - targets: ['otel-collector:8889'] 
+      - targets: ['otel-collector:8889']
+      
+  # Directly scrape .NET application metrics (more direct and efficient)
+  - job_name: 'sample-api'
+    static_configs:
+      - targets: ['sample-api:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s 
