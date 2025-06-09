@@ -15,6 +15,14 @@
       "type": "datasource",
       "pluginId": "loki",
       "pluginName": "Loki"
+    },
+    {
+      "name": "DS_TEMPO",
+      "label": "Tempo",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "tempo",
+      "pluginName": "Tempo"
     }
   ],
   "__requires": [
@@ -34,6 +42,12 @@
       "type": "datasource",
       "id": "loki",
       "name": "Loki",
+      "version": "1.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "tempo",
+      "name": "Tempo",
       "version": "1.0.0"
     }
   ],
@@ -68,104 +82,549 @@
   "panels": [
     {
       "id": 1,
-      "title": "Request Rate",
+      "title": "Service Overview",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(http_server_request_duration_seconds_count{job=\"sample-api\"})",
+          "legendFormat": "Total Requests",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Error Rate",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(http_server_request_duration_seconds_count{job=\"sample-api\", http_response_status_code=~\"[4-5]..\"}) / sum(http_server_request_duration_seconds_count{job=\"sample-api\"}) * 100",
+          "legendFormat": "Error Rate %",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "P99 Latency",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(http_server_request_duration_seconds_bucket{job=\"sample-api\"}) by (le))",
+          "legendFormat": "P99",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red", "value": 1.0 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Active Traces",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(http_server_request_duration_seconds_count{job=\"sample-api\"})",
+          "legendFormat": "Total Requests",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Request Rate by Endpoint",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_count{job=\"Sample.Api\"}[$__rate_interval]))",
-          "legendFormat": "Requests/sec"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "title": "Error Rate",
-      "type": "timeseries",
-       "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "targets": [
-        {
-          "expr": "sum(rate(http_server_request_duration_count{job=\"Sample.Api\", http_response_status_code=~\"5..\"}[$__rate_interval])) / sum(rate(http_server_request_duration_count{job=\"Sample.Api\"}[$__rate_interval])) * 100",
-          "legendFormat": "Error rate %"
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "title": "Request Latency (P99, P95, P50)",
-      "type": "timeseries",
-       "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_bucket{job=\"Sample.Api\"}[$__rate_interval])) by (le))",
-          "legendFormat": "P99"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_bucket{job=\"Sample.Api\"}[$__rate_interval])) by (le))",
-          "legendFormat": "P95"
-        },
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(http_server_request_duration_bucket{job=\"Sample.Api\"}[$__rate_interval])) by (le))",
-          "legendFormat": "P50"
+          "expr": "sum(http_server_request_duration_seconds_count{job=\"sample-api\"}) by (http_route)",
+          "legendFormat": "{{http_route}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": { "mode": "none", "group": "A" },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": { "type": "linear" },
+            "hideFrom": { "legend": false, "tooltip": false, "vis": false },
+            "thresholdsStyle": { "mode": "off" }
+          }
         }
+      },
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
       }
     },
     {
-      "id": 4,
-      "title": "Logs",
+      "id": 6,
+      "title": "Request Latency Percentiles",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(http_server_request_duration_seconds_bucket{job=\"sample-api\"}) by (le))",
+          "legendFormat": "P99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(http_server_request_duration_seconds_bucket{job=\"sample-api\"}) by (le))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(http_server_request_duration_seconds_bucket{job=\"sample-api\"}) by (le))",
+          "legendFormat": "P50",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": { "mode": "none", "group": "A" },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": { "type": "linear" },
+            "hideFrom": { "legend": false, "tooltip": false, "vis": false },
+            "thresholdsStyle": { "mode": "off" }
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Recent Traces",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "expr": "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{job=\"sample-api\"}[$__rate_interval]))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "http_route": "Route",
+              "http_request_method": "Method",
+              "http_response_status_code": "Status",
+              "Value": "Requests/sec"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Requests/sec" },
+            "properties": [
+              { "id": "unit", "value": "reqps" },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "color", "value": { "mode": "thresholds" } },
+              { "id": "thresholds", "value": { 
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "green", "value": 200 },
+                  { "color": "yellow", "value": 300 },
+                  { "color": "orange", "value": 400 },
+                  { "color": "red", "value": 500 }
+                ]
+              }},
+              { "id": "mappings", "value": [
+                {
+                  "options": {
+                    "200": { "color": "green", "index": 0, "text": "200 OK" },
+                    "201": { "color": "green", "index": 1, "text": "201 Created" },
+                    "204": { "color": "green", "index": 2, "text": "204 No Content" },
+                    "400": { "color": "orange", "index": 3, "text": "400 Bad Request" },
+                    "401": { "color": "orange", "index": 4, "text": "401 Unauthorized" },
+                    "403": { "color": "orange", "index": 5, "text": "403 Forbidden" },
+                    "404": { "color": "orange", "index": 6, "text": "404 Not Found" },
+                    "500": { "color": "red", "index": 7, "text": "500 Internal Error" },
+                    "502": { "color": "red", "index": 8, "text": "502 Bad Gateway" },
+                    "503": { "color": "red", "index": 9, "text": "503 Service Unavailable" }
+                  },
+                  "type": "value"
+                }
+              ]}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Requests/sec"
+          }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "title": "Application Logs",
       "type": "logs",
       "datasource": {
         "type": "loki",
         "uid": "Loki"
       },
-      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 16 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 22 },
       "targets": [
         {
-          "expr": "{job=\"Sample.Api\"} | json | label_format traceId=\"{{ .traceid }}\" | traceId =~ \"$TraceID\""
+          "expr": "{job=\"Sample.Api\"} | json | line_format \"{{.timestamp}} [{{.level}}] {{.message}} (trace={{.traceid}})\""
         }
-      ]
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 9,
+      "title": "HTTP Status Codes",
+      "type": "piechart",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 34 },
+      "targets": [
+        {
+          "expr": "sum(http_server_request_duration_seconds_count{job=\"sample-api\"}) by (http_response_status_code)",
+          "legendFormat": "{{http_response_status_code}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "pieType": "pie",
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "right", "calcs": [] },
+        "displayLabels": ["name", "value"]
+      }
+    },
+    {
+      "id": 10,
+      "title": "Request Duration by Method",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 34 },
+      "targets": [
+        {
+          "expr": "sum(http_server_request_duration_seconds_sum{job=\"sample-api\"}) by (http_request_method) / sum(http_server_request_duration_seconds_count{job=\"sample-api\"}) by (http_request_method)",
+          "legendFormat": "{{http_request_method}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "id": 11,
+      "title": "Top Slowest Endpoints",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 34 },
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(http_server_request_duration_seconds_sum{job=\"sample-api\"}[$__rate_interval])) by (http_route) / sum(rate(http_server_request_duration_seconds_count{job=\"sample-api\"}[$__rate_interval])) by (http_route))",
+          "legendFormat": "{{http_route}}",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "http_route": "Endpoint",
+              "Value": "Avg Duration (s)"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Avg Duration (s)"
+          }
+        ]
+      }
     }
   ],
   "schemaVersion": 37,
   "style": "dark",
-  "tags": [],
+  "tags": ["observability", "apm", "dotnet"],
   "templating": {
-    "list": [
-      {
-        "name": "TraceID",
-        "label": "Trace ID",
-        "type": "textbox",
-        "query": "",
-        "current": {},
-        "hide": 0
-      }
-    ]
+    "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-30m",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"],
+    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+  },
   "timezone": "",
-  "title": "Sample.Api Dashboard",
+  "title": "Sample.Api Observability Dashboard",
   "uid": "sample-api-dashboard",
-  "version": 1,
-  "weekStart": ""
+  "version": 2,
+  "weekStart": "",
+  "refresh": "30s"
 } 
