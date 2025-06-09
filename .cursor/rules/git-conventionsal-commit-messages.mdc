@@ -1,0 +1,104 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Git Conventional Commit Messages
+
+## Format
+
+```
+<type>(<optional scope>): <description>
+
+<optional body>
+
+<optional footer>
+```
+
+## Types
+
+- **feat**: A new feature for the user or a significant addition to the application
+- **fix**: A bug fix
+- **docs**: Documentation only changes
+- **style**: Changes that do not affect the meaning of the code (white-space, formatting, etc.)
+- **refactor**: A code change that neither fixes a bug nor adds a feature
+- **perf**: A code change that improves performance
+- **test**: Adding new tests or correcting existing tests
+- **build**: Changes that affect the build system or external dependencies
+- **ci**: Changes to our CI configuration files and scripts
+- **chore**: Other changes that don't modify src or test files
+- **revert**: Reverts a previous commit
+
+## Scope
+
+The scope is optional and should be a noun describing a section of the codebase:
+- Examples: `auth`, `api`, `ui`, `models`, etc.
+- Use `*` when the change affects more than a single scope
+
+## Description Guidelines
+
+- Use the imperative, present tense: "change" not "changed" nor "changes"
+- Don't capitalize the first letter
+- No period (.) at the end
+- Keep it brief but descriptive (50 chars or less)
+
+## Body Guidelines
+
+- Use the imperative, present tense
+- Include motivation for the change
+- Contrast with previous behavior
+- Should be separated from the subject by a blank line
+
+## Footer Guidelines
+
+- May reference issues: `Fixes #123, #456`
+- May include breaking changes with `BREAKING CHANGE:` followed by description
+- Breaking changes can also be indicated by adding `!` before the colon in the type/scope
+- Separated from the body by a blank line
+
+## Examples
+
+```
+feat(auth): implement JWT authentication
+
+Add JSON Web Token authentication to improve security and eliminate
+the need for server-side sessions.
+
+Fixes #123
+```
+
+```
+fix: prevent racing of requests
+
+Introduce a request id and a reference to latest request. Dismiss
+incoming responses other than from latest request.
+
+Fixes #456
+```
+
+```
+feat!: drop support for Node 8
+
+BREAKING CHANGE: use features available in Node 10 and later.
+```
+
+```
+docs: correct spelling in the README
+```
+
+```
+style: convert tabs to spaces
+```
+
+```
+refactor(api): simplify request handling logic
+```
+
+```
+test: add tests for user registration
+```
+
+```
+chore: update dependencies
+```
+

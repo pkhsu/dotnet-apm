@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # .NET Sample API
+  sample-api:
+    build:
+      context: .
+      dockerfile: src/Sample.Api/Dockerfile
+    container_name: sample-api
+    ports:
+      - "8088:8080"
+      - "8081:8081"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Development
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=Sample.Api
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.90.1
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector/config.yml"]
+    volumes:
+      - ./docker/otel-collector/config.yml:/etc/otel-collector/config.yml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus exporter
+    depends_on:
+      - loki
+      - prometheus
+      - tempo
+
+  # Loki
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.47.1
+    container_name: prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  # Tempo
+  tempo:
+    image: grafana/tempo:2.3.1
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./docker/tempo/tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"   # tempo
+      - "9095:9095"   # tempo grpc
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.1.5
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./docker/grafana/provisioning/:/etc/grafana/provisioning/
+    depends_on:
+      - loki
+      - prometheus
+      - tempo 

@@ -1,0 +1,77 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Minimal project brief rule for small (≤3 dev) teams, focusing on core narrative.
+globs: project-brief.md
+alwaysApply: true
+---
+
+# Minimal Project‑Brief Rule (Small‑Team Edition)
+
+> **Version:** 2.0.0  
+> **Updated:** 2025‑05‑22  
+> **Audience:** Small development teams (≤3 engineers)
+
+Based on insights from the [r/ProductManagement – Product brief discussion](https://www.reddit.com/r/ProductManagement/comments/x7l5gk/product_briefs_what_goes_in_yours/) and keeping future growth in mind, this rule mandates only the five core sections below. Additional chapters (Architecture, Timeline, etc.) may be appended as the project matures.
+
+## Required Sections
+
+| # | Section H2 | Description | Key Points |
+|---|-------------|-------------|-----------|
+| 1 | **Background** | Problem statement | – What is the problem?<br>– Current situation / pain points |
+| 2 | **Opportunity** | Why invest | – Why it’s worth investing<br>– Market / business opportunity |
+| 3 | **Hypothesis & Success Criteria** | Expected outcome | – What solving it will achieve<br>– Metrics / definition of success |
+| 4 | **Scope** | Boundaries | – Must‑have items<br>– Out‑of‑scope / deferred items |
+| 5 | **Open Questions** | Unknowns | – Risks or questions that remain unanswered |
+
+> **Section order is strict.** All five sections must be present; remaining content can live in an Appendix or future sections.
+
+## Formatting
+
+- **Language:** English (retain original technical terms where necessary).
+- **Headings:** Use `##`; avoid deeper heading levels.
+- **Line width:** ≤ 100 characters.
+- **Indent:** 2 spaces.
+- **Bullets:** `- ` (dash).
+- **Tables:** Markdown pipe style.
+- **Code blocks:** Triple‑back‑tick fenced; add language tag if needed.
+- Each sentence ≤ 35 words; the file ends with a newline; no trailing spaces.
+
+## Skeleton
+
+```markdown
+# Project FooBar
+
+## Background
+Describe the current pain points…
+
+## Opportunity
+Explain the market or technical advantages of investing…
+
+## Hypothesis & Success Criteria
+If we solve the problem, we expect…
+- Metric 1: XXX < 100 ms  
+- Metric 2: Y % user adoption
+
+## Scope
+- Must‑do: AA, BB
+- Won't‑do: CC (postponed)
+
+## Open Questions
+1. Do we need multi‑region redundancy for deployment?
+2. Should we adopt database X or Y?
+```
+
+## Validation Checklist
+
+1. All five H2 headings are present and in the correct order.
+2. Each section contains at least one meaningful line.
+3. Line width, indentation, and trailing‑space rules are satisfied.
+4. Original technical terms are retained (no incorrect translation).
+
+---
+
+*This minimal rule supersedes the previous, more extensive `project-brief.rules.mdc` requirements for teams that explicitly adopt **Small‑Team Edition**. Unless explicitly stated, use the full rule set Version 1.x.*
