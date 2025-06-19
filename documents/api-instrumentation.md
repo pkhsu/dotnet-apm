@@ -1,379 +1,208 @@
-# API Instrumentation Guide
+# API Observability Implementation Guide
 
-本文件詳細說明 Sample.Api 中所有 API 端點的儀表化 (Instrumentation) 配置、分散式追蹤實作和觀測性最佳實踐。
+本文件說明 Sample.Api 中為了完整收集 **Traces**、**Metrics** 和 **Logs** 三種觀測資料所做的工作和設計決策。
 
-## API 端點概覽
+## 為什麼需要三種觀測資料？
 
-Sample.Api 提供以下 HTTP 端點：
+在現代分散式系統中，單一類型的監控資料無法提供完整的系統健康度視圖：
 
-| 端點 | HTTP 方法 | 控制器 | 功能 | 複雜度 |
-|------|-----------|--------|------|--------|
-| `/WeatherForecast` | GET | WeatherForecastController | 天氣預報查詢 | 簡單 |
-| `/api/Order/create` | POST | OrderController | 訂單建立流程 | 複雜 |
-| `/metrics` | GET | Built-in | Prometheus 指標 | 系統 |
-| `/swagger` | GET | Swagger UI | API 文件 | 系統 |
+- **Traces**: 回答「請求在系統中的完整流程是什麼？」
+- **Metrics**: 回答「系統的整體健康狀態如何？」  
+- **Logs**: 回答「具體發生了什麼事件？」
 
-## 1. WeatherForecast API
+這三種資料相互補強，形成完整的 observability 基礎。
 
-### 端點詳情
+## 整體設計策略
+
+### 採用 Code-based Instrumentation
+我們選擇 **Code-based** 而非 Zero-code 方式，原因：
+- 更精確控制要收集的資料
+- 可以加入業務邏輯相關的標籤和資訊
+- 便於在開發階段除錯和驗證
+- 符合團隊對代碼可控性的要求
+
+---
+
+## Traces 收集策略
+
+### 目標：完整追蹤請求的生命週期
+
+#### Level 1: 框架自動收集 (已完成)
+**工作內容：**
+- 在 `OtelExtensions.cs` 中啟用 ASP.NET Core instrumentation
+- 在 `OtelExtensions.cs` 中啟用 HttpClient instrumentation
+
+**獲得的資料：**
+- 所有 HTTP 請求的 span（方法、URL、狀態碼、耗時）
+- 所有外部 HTTP 呼叫的 span（目標服務、回應時間）
+
+**開發者工作量：** 一次性配置，後續零維護
+
+#### Level 2: 業務流程手動追蹤 (已實作於 OrderController)
+**工作內容：**
+- 建立 `ActivitySource` 實例
+- 在重要業務方法中建立 custom spans
+- 為 spans 添加業務相關的標籤
+
+**實作範例：**
 ```csharp
-[HttpGet(Name = "GetWeatherForecast")]
-public IEnumerable<WeatherForecast> Get()
-```
-
-### 基本資訊
-- **路由**: `/WeatherForecast`
-- **HTTP 方法**: GET
-- **回應型別**: `IEnumerable<WeatherForecast>`
-- **認證**: 不需要
-- **參數**: 無
-
-### 自動儀表化
-由於使用 `OpenTelemetry.Instrumentation.AspNetCore`，此端點自動產生：
-
-#### HTTP Metrics
-```
-http_server_request_duration_seconds_count{
-  job="sample-api",
-  http_request_method="GET",
-  http_route="WeatherForecast",
-  http_response_status_code="200"
-}
-
-http_server_request_duration_seconds_sum{
-  job="sample-api",
-  http_request_method="GET",
-  http_route="WeatherForecast"
-}
-
-http_server_request_duration_seconds_bucket{
-  job="sample-api",
-  http_request_method="GET",
-  http_route="WeatherForecast",
-  le="0.1"
-}
-```
-
-#### HTTP Traces (Spans)
-```
-Span: GET /WeatherForecast
-├── span.kind: server
-├── http.method: GET
-├── http.route: WeatherForecast
-├── http.status_code: 200
-├── http.user_agent: curl/7.64.1
-└── duration: ~50ms
-```
-
-### 手動日誌記錄
-```csharp
-_logger.LogInformation("Generating weather forecast...");
-```
-
-#### 產生的日誌
-```json
-{
-  "timestamp": "2024-01-15T10:30:45.123Z",
-  "level": "Information",
-  "message": "Generating weather forecast...",
-  "source": "Sample.Api.Controllers.WeatherForecastController",
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
-  "spanId": "00f067aa0ba902b7"
-}
-```
-
-## 2. Order API (分散式追蹤範例)
-
-### 端點詳情
-```csharp
-[HttpPost("create")]
-public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
-```
-
-### 基本資訊
-- **路由**: `/api/Order/create`
-- **HTTP 方法**: POST
-- **請求型別**: `CreateOrderRequest`
-- **回應型別**: `CreateOrderResponse`
-- **認證**: 不需要
-
-### 請求/回應模型
-```csharp
-// 請求模型
-public record CreateOrderRequest(
-    string OrderId,
-    string CustomerId, 
-    string ProductId,
-    int Quantity,
-    decimal Amount
-);
-
-// 回應模型
-public record CreateOrderResponse(
-    string OrderId,
-    string Status,
-    string? PaymentId,
-    DateTime CreatedAt
-);
-```
-
-### 自定義 ActivitySource
-```csharp
+// 一次性建立 ActivitySource
 private static readonly ActivitySource ActivitySource = new("Sample.Api.OrderService");
-```
 
-### 分散式追蹤架構
-
-#### 主要 Span (Root)
-```csharp
+// 在業務方法中手動建立 spans
 using var activity = ActivitySource.StartActivity("CreateOrder");
 activity?.SetTag("order.id", request.OrderId);
-activity?.SetTag("customer.id", request.CustomerId);
 ```
 
-產生的追蹤結構：
-```
-Trace: CreateOrder
-├── Span: CreateOrder (Root)
-│   ├── order.id: "ORD-12345"
-│   ├── customer.id: "CUST-67890"
-│   ├── duration: 850ms
-│   └── Child Spans:
-│       ├── CheckInventory (200ms)
-│       ├── ProcessPayment (400ms)
-│       ├── SendNotification (100ms)
-│       └── UpdateInventory (150ms)
-```
+**獲得的資料：**
+- 訂單建立流程的完整 trace tree
+- 每個子步驟的耗時和狀態
+- 業務識別符的追蹤（訂單ID、客戶ID等）
 
-#### 子 Span 實作
+**開發者工作量：** 每個重要業務流程需要額外 5-10 行代碼
 
-##### 1. CheckInventory
+#### Level 3: 錯誤狀態追蹤 (已實作)
+**工作內容：**
+- 在錯誤發生時設定 span 狀態
+- 記錄錯誤原因和上下文
+
+**開發者工作量：** 每個錯誤處理點需要額外 1-2 行代碼
+
+---
+
+## Metrics 收集策略
+
+### 目標：監控系統健康度和效能指標
+
+#### Level 1: 系統指標自動收集 (已完成)
+**工作內容：**
+- 啟用 ASP.NET Core metrics instrumentation
+- 啟用 .NET Runtime metrics instrumentation  
+- 配置 Prometheus exporter
+
+**獲得的資料：**
+- HTTP 請求速率、延遲分布、錯誤率
+- .NET 記憶體使用、GC 頻率、執行緒池狀態
+- 透過 `/metrics` 端點暴露給 Prometheus
+
+**開發者工作量：** 一次性配置，零維護
+
+#### Level 2: 業務指標收集 (待實作)
+**未來可擴展的工作：**
+- 建立 `Meter` 實例收集業務指標
+- 例如：訂單建立成功率、支付失敗次數、庫存檢查平均耗時
+
+**預期開發者工作量：** 每個業務指標需要 3-5 行代碼
+
+---
+
+## Logs 收集策略
+
+### 目標：提供詳細的事件記錄和除錯資訊
+
+#### Level 1: 結構化日誌基礎 (已完成)
+**工作內容：**
+- 整合 OpenTelemetry logging provider
+- 配置自動 trace correlation
+- 設定 OTLP exporter
+
+**獲得的資料：**
+- 所有日誌自動包含 TraceId 和 SpanId
+- 結構化的 JSON 格式日誌
+- 與 traces 完全關聯的日誌事件
+
+**開發者工作量：** 一次性配置，後續使用標準 `ILogger`
+
+#### Level 2: 業務事件記錄 (已實作於 OrderController)
+**工作內容：**
+- 在關鍵業務節點記錄結構化日誌
+- 包含業務識別符和狀態資訊
+
+**實作範例：**
 ```csharp
-private async Task<InventoryCheckResult> CheckInventory(string productId, int quantity)
-{
-    using var activity = ActivitySource.StartActivity("CheckInventory");
-    activity?.SetTag("product.id", productId);
-    activity?.SetTag("quantity", quantity);
-    
-    _logger.LogInformation("Checking inventory for ProductId: {ProductId}, Quantity: {Quantity}", 
-        productId, quantity);
-
-    // 模擬 API 呼叫延遲
-    await Task.Delay(Random.Shared.Next(100, 300));
-    
-    var available = Random.Shared.NextDouble() > 0.1; // 90% 成功率
-    
-    return new InventoryCheckResult(available, productId);
-}
-```
-
-##### 2. ProcessPayment
-```csharp
-private async Task<PaymentResult> ProcessPayment(string customerId, decimal amount)
-{
-    using var activity = ActivitySource.StartActivity("ProcessPayment");
-    activity?.SetTag("customer.id", customerId);
-    activity?.SetTag("amount", amount);
-
-    // 模擬支付處理延遲
-    await Task.Delay(Random.Shared.Next(200, 500));
-    
-    var success = Random.Shared.NextDouble() > 0.05; // 95% 成功率
-    
-    if (!success)
-    {
-        activity?.SetStatus(ActivityStatusCode.Error, "Payment processing failed");
-    }
-    
-    return new PaymentResult(success, paymentId);
-}
-```
-
-##### 3. SendNotification
-```csharp
-private async Task SendNotification(string customerId, string orderId)
-{
-    using var activity = ActivitySource.StartActivity("SendNotification");
-    activity?.SetTag("customer.id", customerId);
-    activity?.SetTag("order.id", orderId);
-
-    await Task.Delay(Random.Shared.Next(50, 150));
-    
-    _logger.LogInformation("Notification sent successfully for CustomerId: {CustomerId}, OrderId: {OrderId}", 
-        customerId, orderId);
-}
-```
-
-##### 4. UpdateInventory
-```csharp
-private async Task UpdateInventory(string productId, int quantity)
-{
-    using var activity = ActivitySource.StartActivity("UpdateInventory");
-    activity?.SetTag("product.id", productId);
-    activity?.SetTag("quantity", quantity);
-
-    await Task.Delay(Random.Shared.Next(80, 200));
-    
-    _logger.LogInformation("Inventory updated successfully for ProductId: {ProductId}", productId);
-}
-```
-
-### 錯誤處理與追蹤
-```csharp
-try
-{
-    // 業務邏輯
-}
-catch (Exception ex)
-{
-    _logger.LogError(ex, "Error creating order for OrderId: {OrderId}", request.OrderId);
-    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-    return StatusCode(500, "Internal server error");
-}
-```
-
-## 3. 系統端點
-
-### Prometheus Metrics 端點
-- **路由**: `/metrics`
-- **功能**: 暴露 Prometheus 格式指標
-- **配置**: `app.MapPrometheusScrapingEndpoint()`
-
-#### 暴露的指標類型
-1. **HTTP 請求指標**
-   - Counter: 請求總數
-   - Histogram: 請求持續時間分布
-   - Gauge: 當前活躍請求數
-
-2. **.NET Runtime 指標**
-   - GC collection counts
-   - Memory usage
-   - ThreadPool statistics
-   - Assembly load counts
-
-### Swagger/OpenAPI 端點
-- **路由**: `/swagger`
-- **功能**: API 文件和測試介面
-- **配置**: 強制啟用，不受環境影響
-
-## 4. OpenTelemetry 配置
-
-### Resource 配置
-```csharp
-var resourceBuilder = ResourceBuilder.CreateDefault().AddService(serviceName);
-```
-
-自動偵測的資源屬性：
-- `service.name`: "Sample.Api"
-- `service.version`: Assembly version
-- `host.name`: Container hostname
-- `process.pid`: Process ID
-
-### Tracing 配置
-```csharp
-tracing.SetResourceBuilder(resourceBuilder)
-    .AddAspNetCoreInstrumentation()
-    .AddHttpClientInstrumentation()
-    .AddSource("Sample.Api.OrderService") // 自定義 ActivitySource
-    .AddOtlpExporter();
-```
-
-#### 自動追蹤的元件
-- **ASP.NET Core**: HTTP requests/responses
-- **HttpClient**: 外部 HTTP 呼叫
-- **Custom ActivitySource**: 業務邏輯追蹤
-
-### Metrics 配置
-```csharp
-metrics.SetResourceBuilder(resourceBuilder)
-    .AddAspNetCoreInstrumentation()
-    .AddHttpClientInstrumentation()
-    .AddRuntimeInstrumentation()
-    .AddPrometheusExporter()
-    .AddOtlpExporter();
-```
-
-#### 自動收集的指標
-- **HTTP 指標**: Request rate, duration, status codes
-- **Runtime 指標**: GC, memory, threading
-- **Custom 指標**: 可透過 `Meter` API 新增
-
-### Logging 配置
-```csharp
-logging.AddOpenTelemetry(options =>
-{
-    options.SetResourceBuilder(resourceBuilder);
-    options.IncludeScopes = true;
-    options.AddOtlpExporter();
-});
-```
-
-#### 日誌增強功能
-- **Structured logging**: JSON 格式
-- **Trace correlation**: TraceId/SpanId 自動附加
-- **Scope inclusion**: 記錄執行範圍
-- **OTLP export**: 發送至 OpenTelemetry Collector
-
-## 5. 最佳實踐與建議
-
-### Span 命名慣例
-- **HTTP spans**: `{METHOD} {route}`
-- **Database spans**: `{operation} {table}`
-- **External calls**: `{service} {operation}`
-- **Business logic**: `{BusinessProcess}`
-
-### Tag 設定準則
-```csharp
-// 良好的 tag 範例
-activity?.SetTag("order.id", orderId);
-activity?.SetTag("customer.id", customerId);
-activity?.SetTag("product.id", productId);
-activity?.SetTag("operation.type", "create");
-
-// 避免高基數 tags
-activity?.SetTag("user.email", email); // ❌ 高基數
-activity?.SetTag("timestamp", DateTime.Now); // ❌ 唯一值
-```
-
-### 錯誤狀態設定
-```csharp
-// 業務邏輯錯誤
-if (!inventoryResult.Available)
-{
-    activity?.SetStatus(ActivityStatusCode.Error, "Insufficient inventory");
-}
-
-// 系統異常
-catch (Exception ex)
-{
-    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-}
-```
-
-### 日誌關聯
-```csharp
-// 結構化日誌包含業務識別符
 _logger.LogInformation("Order creation started for OrderId: {OrderId}, CustomerId: {CustomerId}", 
     request.OrderId, request.CustomerId);
-
-// 錯誤日誌包含完整上下文
-_logger.LogError(ex, "Payment failed for CustomerId: {CustomerId}, Amount: {Amount}", 
-    customerId, amount);
 ```
 
-### 效能考量
-- **Sampling**: 生產環境建議使用取樣策略
-- **Batch export**: 使用批次匯出減少網路負載
-- **Resource limits**: 設定適當的記憶體和 CPU 限制
-- **Async operations**: 避免阻塞主執行緒
+**獲得的資料：**
+- 業務流程的詳細步驟記錄
+- 便於除錯的上下文資訊
+- 與對應 trace 完全關聯
 
-### 測試策略
-```bash
-# 使用 test_dashboard.sh 產生測試流量
-./test_dashboard.sh
+**開發者工作量：** 每個重要業務事件需要 1 行日誌代碼
 
-# 驗證儀表化正確性
-./verify_dashboard.sh
-```
+---
 
-此配置提供了完整的 API 觀測性覆蓋，從簡單的 HTTP 請求到複雜的分散式業務流程都能有效追蹤和監控。 
+## 整合與關聯
+
+### 自動關聯機制 (已實作)
+**實現方式：**
+- 統一的 `ResourceBuilder` 配置
+- OpenTelemetry 自動的 context propagation
+- 所有三種資料共享相同的 service metadata
+
+**效果：**
+- 任何一個 HTTP 請求都可以看到完整的 trace、相關的 metrics 變化、對應的 logs
+- 支援分散式系統的端到端追蹤
+- 異常發生時可以從任何一種資料快速定位到完整上下文
+
+### 資料導出統一化 (已實作)
+**配置：**
+- 所有資料都透過 OTLP 協議導出
+- Prometheus metrics 額外提供 pull-based 接取
+- 統一的 collector 端點配置
+
+---
+
+## 開發者指引
+
+### 新增 API 端點時的工作檢查清單
+
+#### ✅ 基礎要求（零額外工作）
+- HTTP traces 和 metrics 自動收集
+- 日誌自動包含 trace correlation
+
+#### 📝 業務邏輯複雜時的額外工作
+- [ ] 建立 custom ActivitySource（如果還沒有）
+- [ ] 在主要業務方法中建立 spans
+- [ ] 為 spans 添加業務相關標籤
+- [ ] 在關鍵步驟記錄結構化日誌
+- [ ] 在錯誤處理中設定 span 狀態
+
+#### 🎯 工作量估算
+- **簡單 CRUD API**: 0 額外工作
+- **複雜業務流程**: 每個流程約 10-15 行額外代碼
+- **新的業務領域**: 需要建立新的 ActivitySource
+
+### 命名和標籤慣例
+
+#### Span 命名
+- 業務操作：`CreateOrder`, `ProcessPayment`
+- 外部呼叫：`CheckInventory`, `SendNotification`
+
+#### Tag 設定
+- 業務識別符：`order.id`, `customer.id`, `product.id`
+- 操作類型：`operation.type`
+- 避免高基數資料：不要用時間戳或唯一值作為 tag
+
+#### 日誌格式
+- 使用結構化參數：`{OrderId}`, `{CustomerId}`
+- 包含足夠的上下文資訊便於除錯
+- 錯誤日誌包含完整的 exception 資訊
+
+---
+
+## 效益與維護
+
+### 目前獲得的能力
+- **端到端可視性**: 從 HTTP 請求到業務邏輯的完整追蹤
+- **效能監控**: 實時的 API 回應時間和系統資源使用
+- **問題定位**: 任何異常都可以快速定位到完整上下文
+- **業務洞察**: 透過 traces 和 logs 了解業務流程執行狀況
+
+### 維護工作量
+- **日常維護**: 幾乎零維護，OpenTelemetry SDK 自動處理大部分工作
+- **新功能開發**: 按照既定慣例，每個複雜業務流程需要少量額外代碼
+- **故障排除**: 透過統一的 observability stack 大幅減少除錯時間
+
+這個實作平衡了觀測能力和開發工作量，為團隊提供了強大的 observability 基礎，同時保持了代碼的簡潔性和可維護性。 
